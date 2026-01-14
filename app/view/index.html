@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Minisys IDE</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <link rel="stylesheet" href="../style/index.css" />
+  </head>
+  <body>
+    <div class="toolbar" id="toolbar">
+  <div id="toolbar-icons">
+    <span id="new-file" class="icon" title="新建文件">📄</span>
+    <span id="save" class="icon" title="保存文件">💾</span>
+    <span id="save-as" class="icon" title="另存为">📥</span>
+    <span id="magic-click" class="icon" title="一键执行">▶</span>
+    <span id="compile" class="icon" title="编译">🔨</span>
+    <span id="assembly" class="icon" title="汇编">🧩</span>
+    <span id="assembly-and-link" class="icon" title="汇编并链接">🔗</span>
+    <span id="serial" class="icon" title="串口烧录">🔌</span>
+  </div>
+</div>
+    <div class="container">
+      <!-- 左侧活动栏 -->
+      <div id="activity-bar">
+        <div class="activity-item active" id="activity-explorer" title="资源管理器">
+          <span class="activity-icon">📁</span>
+        </div>
+        <div class="activity-item" id="activity-search" title="搜索">
+          <span class="activity-icon">🔍</span>
+        </div>
+        <div class="activity-item" id="activity-settings" title="设置">
+          <span class="activity-icon">⚙️</span>
+        </div>
+      </div>
+      
+      <!-- 侧边栏面板 -->
+      <div id="sidebar-panel">
+        <!-- 资源管理器视图 -->
+        <div id="explorer-view" class="sidebar-view active">
+          <div id="sidebar">
+            <div id="sidebar-icons">
+              <span id="refresh" title="刷新资源管理器" class="icon">🔄</span>
+              <span id="newFile" title="新建文件" class="icon">📄</span>
+              <span id="newFolder" title="新建文件夹" class="icon">📁</span>
+              <span id="openCurFolder" title="打开文件夹" class="icon">📂</span>
+            </div>
+            <span id="current-path">未打开任何目录</span>
+            <div id="tree-view"></div>
+          </div>
+        </div>
+        
+        <!-- 搜索视图 -->
+        <div id="search-view" class="sidebar-view">
+          <div class="search-container">
+            <div class="search-header">
+              <input type="text" id="search-input" placeholder="搜索工作区..." />
+            </div>
+            <div id="search-results" class="search-results"></div>
+          </div>
+        </div>
+        
+        <!-- 设置视图 -->
+        <div id="settings-view" class="sidebar-view">
+          <div class="settings-container">
+            <div class="settings-item" id="settings-editor">
+              <span class="settings-icon">📝</span>
+              <span class="settings-label">编辑器个性化</span>
+            </div>
+            <div class="settings-item" id="settings-toolchain">
+              <span class="settings-icon">🔧</span>
+              <span class="settings-label">工具链设置</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 侧边栏拖拽条 -->
+      <div id="sidebar-dragbar" title="拖动调整侧边栏宽度"></div>
+
+      <!-- 工作区：编辑器 + 分割条 + 终端 -->
+      <div id="workarea">
+        <div id="editor"></div>
+        <!-- 设置面板覆盖层 -->
+        <div id="settings-overlay" style="display: none;">
+          <div id="settings-content"></div>
+        </div>
+        <div id="console-dragbar" title="拖动调整终端高度"></div>
+        <div id="console">
+          <div class="console-header">
+            <span id="btn-maximize" class="emoji-btn" title="放大/缩小">⛶</span>
+            <span id="btn-delete" class="emoji-btn" title="删除终端">🗑️</span>
+            <span class="console-title">PowerShell</span>
+          </div>
+          <div id="terminal-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="../../lib/ace/ace.js"></script>
+    <script src="../../lib/ace/ext-language_tools.js"></script>
+    <script>
+      require('../script/initAll.js')
+
+      // 定义 $ 函数用于 DOM 选择（与 terminal.js 等脚本保持一致）
+      const $ = document.querySelector.bind(document)
+
+      // 等待DOM加载完成后再绑定按钮事件
+      function initConsoleButtons() {
+        // 删除终端按钮
+        const deleteBtn = document.querySelector('#btn-delete')
+        if (deleteBtn) {
+          deleteBtn.onclick = () => {
+            const { closeTerminal } = require('../script/terminal')
+            closeTerminal()
+          }
+        }
+        
+        // 放大缩小按钮 - 使用事件委托
+        const consoleHeader = document.querySelector('.console-header')
+        
+        if (consoleHeader) {
+          // 使用 window 对象存储状态，避免每次函数调用时重置
+          if (typeof window.terminalMaximized === 'undefined') {
+            window.terminalMaximized = false
+          }
+          
+          // 监控console元素的classList和style变化
+          const consoleEl = document.querySelector('#console')
+          const editorEl = document.querySelector('#editor')
+          
+          // 监控编辑器元素的变化
+          if (editorEl) {
+            const editorObserver = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                  // Editor style changed - no action needed
+                }
+              })
+            })
+            editorObserver.observe(editorEl, {
+              attributes: true,
+              attributeOldValue: true,
+              attributeFilter: ['style']
+            })
+          }
+          
+          if (consoleEl) {
+            // 监控class变化
+            const classObserver = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                  // Console class changed - no action needed
+                }
+              })
+            })
+            classObserver.observe(consoleEl, {
+              attributes: true,
+              attributeOldValue: true,
+              attributeFilter: ['class']
+            })
+            
+            // 监控style属性变化
+            const styleObserver = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                  // Console style changed - no action needed
+                }
+              })
+            })
+            styleObserver.observe(consoleEl, {
+              attributes: true,
+              attributeOldValue: true,
+              attributeFilter: ['style']
+            })
+          }
+          
+          // 使用事件委托处理按钮点击
+          consoleHeader.addEventListener('click', (e) => {
+            const maximizeBtn = e.target.closest('#btn-maximize')
+            if (!maximizeBtn) return
+            
+            e.preventDefault()
+            e.stopPropagation()
+            
+            const consoleEl = document.querySelector('#console')
+            if (!consoleEl) {
+              console.error('Console element not found')
+              return
+            }
+            
+            if (!window.terminalMaximized) {
+              consoleEl.classList.add('maximized')
+              window.terminalMaximized = true
+              maximizeBtn.textContent = '⛶'
+              maximizeBtn.title = '缩小'
+              // 清除所有内联样式，让 CSS 的 #console.maximized 规则生效
+              consoleEl.style.flex = ''
+              consoleEl.style.height = ''
+              consoleEl.style.minHeight = ''
+              consoleEl.style.maxHeight = ''
+            } else {
+              consoleEl.classList.remove('maximized')
+              window.terminalMaximized = false
+              maximizeBtn.textContent = '⛶'
+              maximizeBtn.title = '放大'
+              // 清除所有内联样式，让 CSS 规则自然生效
+              consoleEl.style.flex = ''
+              consoleEl.style.height = ''
+              consoleEl.style.minHeight = ''
+              consoleEl.style.maxHeight = ''
+            }
+            // 在最大化/缩小终端时，需要触发 resize 来让 Ace Editor 调整大小
+            // 但需要确保编辑器容器有正确的高度
+            if (window.editor && typeof window.editor.resize === 'function') {
+              setTimeout(() => {
+                const editorEl = document.querySelector('#editor')
+                if (editorEl && editorEl.offsetHeight > 0) {
+                  window.editor.resize()
+                }
+              }, 100)
+            } else {
+              window.dispatchEvent(new Event('resize'))
+            }
+          })
+        }
+      }
+      
+      // 如果DOM已加载，立即执行；否则等待
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initConsoleButtons)
+      } else {
+        // DOM已加载，延迟一点确保所有元素都已创建（特别是终端按钮可能在终端初始化后才创建）
+        setTimeout(initConsoleButtons, 200)
+      }
+
+      // 拖拽分割条
+      ;(function(){
+        const work = document.getElementById('workarea')
+        const bar  = document.getElementById('console-dragbar')
+        const term = document.getElementById('console')
+        let dragging = false, startY = 0, startH = 0
+
+        bar.addEventListener('mousedown', e => {
+          dragging = true
+          startY = e.clientY
+          startH = term.getBoundingClientRect().height
+          document.body.style.cursor = 'row-resize'
+          e.preventDefault()
+        })
+
+        window.addEventListener('mousemove', e => {
+          if (!dragging) return
+          const dy = e.clientY - startY
+          const newH = Math.max(120, Math.min(work.clientHeight - 80, startH - dy))
+          term.style.flexBasis = newH + 'px'
+          // 拖拽时触发 resize，但需要确保编辑器有正确的高度
+          if (window.editor && typeof window.editor.resize === 'function') {
+            setTimeout(() => {
+              const editorEl = document.querySelector('#editor')
+              if (editorEl && editorEl.offsetHeight > 0) {
+                window.editor.resize()
+              }
+            }, 50)
+          } else {
+            window.dispatchEvent(new Event('resize'))
+          }
+        })
+
+        window.addEventListener('mouseup', () => {
+          if (!dragging) return
+          dragging = false
+          document.body.style.cursor = ''
+        })
+      })()
+
+      // ===== 侧边栏拖拽宽度 =====
+      ;(function () {
+        const sidebarPanel  = document.getElementById('sidebar-panel')
+        const dragbar  = document.getElementById('sidebar-dragbar')
+        // 恢复上次宽度
+        const saved = localStorage.getItem('sidebarWidth')
+        if (saved && sidebarPanel) {
+          const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+          if (activeView) activeView.style.width = saved + 'px'
+        }
+
+        let dragging = false
+        let startX = 0, startW = 0
+
+        const minW = 160
+        const maxW = Math.floor(window.innerWidth * 0.6) // 最大 60vw
+
+        if (dragbar) {
+          dragbar.addEventListener('mousedown', (e) => {
+            dragging = true
+            startX = e.clientX
+            const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+            if (activeView) startW = activeView.getBoundingClientRect().width
+            document.body.style.cursor = 'col-resize'
+            document.body.style.userSelect = 'none'
+            e.preventDefault()
+          })
+        }
+
+        window.addEventListener('mousemove', (e) => {
+          if (!dragging || !sidebarPanel) return
+          const dx = e.clientX - startX
+          let newW = startW + dx
+          newW = Math.max(minW, Math.min(maxW, newW))
+          const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+          if (activeView) {
+            activeView.style.width = newW + 'px'
+            // 侧边栏拖拽时触发 resize，但需要确保编辑器有正确的高度
+            if (window.editor && typeof window.editor.resize === 'function') {
+              setTimeout(() => {
+                const editorEl = document.querySelector('#editor')
+                if (editorEl && editorEl.offsetHeight > 0) {
+                  window.editor.resize()
+                }
+              }, 50)
+            } else {
+              window.dispatchEvent(new Event('resize'))
+            }
+          }
+        })
+
+        window.addEventListener('mouseup', () => {
+          if (!dragging) return
+          dragging = false
+          document.body.style.cursor = ''
+          document.body.style.userSelect = ''
+          if (sidebarPanel) {
+            const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+            if (activeView) {
+              const w = activeView.getBoundingClientRect().width | 0
+              localStorage.setItem('sidebarWidth', String(w))
+            }
+          }
+        })
+
+        // 双击折叠/还原
+        if (dragbar) {
+          let lastWidth = parseInt(saved || 250, 10)
+          dragbar.addEventListener('dblclick', () => {
+            if (!sidebarPanel) return
+            const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+            if (!activeView) return
+            const cur = activeView.getBoundingClientRect().width | 0
+            if (cur > 20) {
+              lastWidth = cur
+              activeView.style.width = '0px'
+            } else {
+              activeView.style.width = (lastWidth || 250) + 'px'
+            }
+            // 双击侧边栏时触发 resize，但需要确保编辑器有正确的高度
+            if (window.editor && typeof window.editor.resize === 'function') {
+              setTimeout(() => {
+                const editorEl = document.querySelector('#editor')
+                if (editorEl && editorEl.offsetHeight > 0) {
+                  window.editor.resize()
+                }
+              }, 50)
+            } else {
+              window.dispatchEvent(new Event('resize'))
+            }
+          })
+        }
+
+        // 窗口变化时校正最大宽度
+        window.addEventListener('resize', () => {
+          if (!sidebarPanel) return
+          const activeView = sidebarPanel.querySelector('.sidebar-view.active')
+          if (activeView) {
+            const cur = activeView.getBoundingClientRect().width | 0
+            const limit = Math.floor(window.innerWidth * 0.6)
+            if (cur > limit) activeView.style.width = limit + 'px'
+          }
+        })
+      })()
+
+      require('../script/editor.js')
+      require('../script/contextmenu.js')
+    </script>
+  </body>
+</html>

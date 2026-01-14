@@ -1,0 +1,118 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #1e1e1e;          /* 暗色 */
+  color: #f1f1f1;
+  font-family: 'Consolas', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;  /* 让窗口从上往下展开 */
+  overflow-x: hidden;           /* ❗防止水平滚动条 */
+}
+
+html {
+  border: 2px solid gray;
+  box-sizing: border-box;
+}
+
+
+/* 顶部标题 */
+#header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  width: 100%;
+  background-color: #2c2c2c;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+#logo.emoji-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;          
+  height: 28px;
+  font-size: 22px;      
+  line-height: 1;
+  user-select: none;
+}
+#title {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* 主体容器 */
+.options {
+  width: 360px;
+  background-color: #252526;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+  padding: 14px 24px;
+  margin-top: 10px;
+}
+
+/* 每项设置：标签在上，框在下 */
+.ribbon {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.ribbon label {
+  font-size: 15px;
+  color: #ddd;
+  margin-bottom: 8px;
+}
+
+/* 输入框和下拉框通用样式 */
+#input, #select {
+  width: 100%;
+  background-color: #3a3a3a;
+  color: #f1f1f1;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 聚焦高亮 */
+#input:focus, #select:focus {
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0,120,212,0.3);
+}
+
+/* 按钮 */
+.btn-xx {
+  width: 120px;
+  height: 38px;
+  border-radius: 6px;
+  background-color: #0078d4;
+  color: #fff;
+  font-size: 15px;
+  border: none;
+  margin: 6px 10px 0 0;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.btn-xx:hover { background-color: #1086e8; }
+.btn-xx:active { transform: translateY(1px); }
+
+/* 取消按钮淡化 */
+#btn-quit {
+  background-color: #3a3a3a;
+  color: #ccc;
+}
+#btn-quit:hover { background-color: #4a4a4a; }
+

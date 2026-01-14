@@ -1,0 +1,113 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  align-content: center;
+  user-select: none;
+  font-family: 'Consolas', monospace;
+  background-color: #1e1e1e; /* 背景黑色 */
+  color: #f1f1f1;            /* 字体白色 */
+}
+
+html {
+  border: 2px solid gray;
+}
+#header {
+  display: flex;
+  align-items: center;     
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 16px;       
+}
+
+#logo.emoji-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 22px;
+  line-height: 1;
+  margin-top: 2px;          /* 向下微移2px */
+}
+#header #title {
+  font-size: 22px;
+  position: relative;
+  top: 1px;                 /* 向下移动 1px */
+}
+
+/* 主体区域背景深灰 */
+.options {
+  width: auto;
+  background-color: #252526; /* 深灰背景 */
+  text-align: center;
+  margin: 0 auto;
+}
+
+.options .ribbon {
+  width: 100%;
+  height: 30px;
+  background-color: transparent; 
+  margin-bottom: 16px;
+}
+
+/* 标签字体白色 */
+.options .ribbon #label {
+  font-size: 20px;
+  color: #f1f1f1;
+}
+
+/* 输入框灰色矩形框 */
+.options .ribbon #input {
+  display: inline-block;
+  border-radius: 6px;
+  padding-left: 5px;
+  font-size: 16px;
+  resize: none;
+  background-color: #3a3a3a; /* 灰色背景 */
+  color: #f1f1f1;            /* 字体白色 */
+  border: 1px solid #555;    /* 灰色边框 */
+  outline: none;
+}
+
+/* 聚焦时高亮 */
+.options .ribbon #input:focus {
+  border-color: #0078d4; /* 蓝色高亮边框 */
+  box-shadow: 0 0 0 2px rgba(0,120,212,0.3);
+}
+
+.options .btn-xx {
+  margin-bottom: 48px;
+  margin-left: 16px;
+  margin-right: 16px;
+  width: 90px;
+  height: 48px;
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+/* 确认按钮亮蓝 */
+#btn-confirm {
+  background-color: #0078d4;
+  color: #fff;
+}
+#btn-confirm:hover {
+  background-color: #1086e8;
+}
+
+/* 放弃按钮灰色 */
+#btn-quit {
+  background-color: #3a3a3a;
+  color: #ccc;
+}
+#btn-quit:hover {
+  background-color: #4a4a4a;
+}

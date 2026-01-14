@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../style/toolchainSettings.css" />
+    <title>工具链配置</title>
+  </head>
+  <body>
+    <div id="header">
+  <span id="logo" class="emoji-logo" role="img" aria-label="设置">⚙️</span>
+  <span id="title">工具链配置</span>
+</div>
+    <div style="margin-top: 10px"></div>
+    <div class="options">
+      <div class="ribbon">
+        <label for="input"
+          ><span id="label">编译器：</span>
+          <textarea name="compiler-path" id="input" cols="45" rows="1" readonly></textarea>
+          <button class="btn-path" id="btn-compiler-path">浏览..</button>
+        </label>
+      </div>
+      <div class="ribbon">
+        <label for="input"
+          ><span id="label">汇编器：</span>
+          <textarea name="assembler-path" id="input" cols="45" rows="1" readonly></textarea>
+          <button class="btn-path" id="btn-assembler-path">浏览..</button>
+        </label>
+      </div>
+      <div class="ribbon">
+        <label for="input"
+          ><span id="label">串口工具：</span>
+          <textarea name="serialport-path" id="input" cols="45" rows="1" readonly></textarea>
+          <button class="btn-path" id="btn-serialport-path">浏览..</button>
+        </label>
+      </div>
+      <!-- <div class="ribbon">
+        <label for="input"
+          ><span id="label">串口号：</span>
+          <select name="serialport-num" id="input"></select>
+        </label>
+        <label for="input"
+          ><span id="label">波特率：</span>
+          <select name="serialport-baud" id="input"></select>
+        </label>
+      </div> -->
+      <button class="btn-xx" id="btn-confirm">确认修改</button>
+      <button class="btn-xx" id="btn-quit">放弃修改</button>
+    </div>
+  </body>
+  <script>
+    require('../script/toolchainSettings.js')
+  </script>
+</html>

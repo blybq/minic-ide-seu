@@ -1,0 +1,40 @@
+{
+  "name": "minisys-ide",
+  "version": "1.3.1",
+  "description": "Minisys IDE",
+  "main": "app.js",
+  "scripts": {
+    "dev": "set NODE_ENV=development && electron .",
+    "start": "set NODE_ENV=production && electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dree": "^2.4.16",
+    "electron-prompt": "^1.6.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.2",
+    "electron": "^10.1.3",
+    "electron-builder": "^22.9.1",
+    "electron-packager": "^15.1.0",
+    "electron-reloader": "^1.0.1"
+  },
+  "build": {
+    "appId": "com.minisys.ide.app",
+    "asar": false,
+    "win": {
+      "icon": "./asset/ide.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

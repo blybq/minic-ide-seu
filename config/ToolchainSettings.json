@@ -1,0 +1,7 @@
+{
+  "compiler_path": "../minic-compiler-refactored/build/main.js",
+  "assembler_path": "../advanced-minisys-assembler/dist/src/index.js",
+  "serialport_num": "COM5",
+  "serialport_path": "./lib/minisys-serialport/UartAssist.exe",
+  "serialport_baud": "9600"
+}

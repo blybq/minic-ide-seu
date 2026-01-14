@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../style/editorSettings.css" />
+    <title>编辑器配置</title>
+  </head>
+  <body>
+    <div id="header">
+  <span id="logo" class="emoji-logo" role="img" aria-label="设置">⚙️</span>
+  <span id="title">编辑器配置</span>
+</div>
+    <div class="options">
+      <div class="ribbon">
+        <label id="label" for="input">字体大小<input id="input" name="font-size" type="number" /></label>
+      </div>
+      <div class="ribbon">
+        <label id="label" for="theme"
+          >主题
+          <select id="select" name="theme"></select>
+        </label>
+      </div>
+      <button class="btn-xx" id="btn-confirm">确认修改</button>
+      <button class="btn-xx" id="btn-quit">放弃修改</button>
+    </div>
+  </body>
+  <script>
+    require('../script/editorSettings.js')
+  </script>
+</html>
