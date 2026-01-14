@@ -8,10 +8,38 @@ const fs = require('fs')
 const prompt = require('electron-prompt')
 const child_process = require('child_process')
 const { dialog } = require('electron').remote
+const iconv = require('iconv-lite')
 
 const { getProperty, setProperty, $, getHighlightMode, getIcon } = require('./utils')
 const { saveSessionToFile, newFileDialog } = require('./fileOperation')
 const { refreshExplorer } = require('./autoRefresh')
+
+// 使用指定编码读取文件
+function readFileWithEncoding(filePath, encoding) {
+  return new Promise((resolve, reject) => {
+    if (encoding === 'utf8' || encoding === 'utf-8') {
+      // UTF-8可以直接使用fs.readFile
+      fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) reject(err)
+        else resolve(data)
+      })
+    } else {
+      // 其他编码需要使用iconv-lite
+      fs.readFile(filePath, (err, buffer) => {
+        if (err) {
+          reject(err)
+        } else {
+          try {
+            const text = iconv.decode(buffer, encoding)
+            resolve(text)
+          } catch (decodeErr) {
+            reject(new Error(`解码失败: ${decodeErr.message}`))
+          }
+        }
+      })
+    }
+  })
+}
 
 /**
  * 初始化侧边栏
@@ -41,8 +69,8 @@ function initSideBar() {
 
       // 下部的新建文件按钮响应
       newFileBtn.addEventListener('click', async () => {
+        // 修复：不在按钮点击时刷新，而是在文件保存对话框确认后由newFileDialog内部刷新
         await newFileDialog('新建文件')
-        refreshExplorer()
       })
 
       // 下部的新建文件夹按钮响应
@@ -118,8 +146,24 @@ function setupTreeViewEvents(treeView) {
       }
       setProperty('currentFilePath', dataset.path)
       if (getProperty('currentFilePath')) {
-        fs.readFile(getProperty('currentFilePath'), 'utf8', (err, data) => {
-          err && dialog.showErrorBox('错误', String(err))
+        // 添加到最近打开的文件
+        try {
+          const { addRecentFile } = require('./recentHistory')
+          addRecentFile(dataset.path)
+        } catch (err) {
+          console.error('添加文件历史记录失败:', err)
+        }
+        
+        // 获取文件编码设置
+        let encoding = 'utf8'
+        try {
+          const settingsPath = path.join(__dirname, '../../config/AppSettings.json')
+          const appSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+          encoding = appSettings.file_encoding || 'utf8'
+        } catch (err) {
+          // 使用默认编码
+        }
+        readFileWithEncoding(getProperty('currentFilePath'), encoding).then(data => {
           // 为新打开的文件新建一个会话
           docToAdd.session = new ace.EditSession(data)
           // 为了实现文件被修改的检测功能，监听会话的change事件
@@ -139,35 +183,30 @@ function setupTreeViewEvents(treeView) {
           editor.setSession(openedDocs.slice(-1)[0].session)
           editor.moveCursorTo(0)
           setProperty('currentFilePath', dataset.path)
+        }).catch(err => {
+          dialog.showErrorBox('错误', String(err))
         })
       }
     } else if (dataset.type == 'directory') {
       // 更新文件夹开关状态
-      /**
-       * 寻找最近的兄弟姐妹结点
-       */
-      function findClosestSibling(dom, label, mustAfter) {
-        let on = !mustAfter
-        let res = void 0
-        dom.parentNode.childNodes.forEach(node => {
-          if (node == dom) on = true
-          if (on && node.nodeType == 1 && node.tagName.toLowerCase() == label.toLowerCase()) {
-            res = node
-            return
-          }
-        })
-        return res
-      }
-      // 用来渲染这个目录下面的孩子的ul
-      const closestUL = findClosestSibling(target, 'ul', true)
+      // 找到 target 所在的 li 元素
+      const liElement = target.closest('li')
+      if (!liElement) return
+      
+      // 在 li 元素中查找 ul 子元素
+      const closestUL = liElement.querySelector('ul')
       if (closestUL && target.dataset['path']) {
         // 渲染孩子
         initSideBarLow(target.dataset['path'], closestUL)
       }
-      // 更新文件夹开闭图标
-      const closestImg = findClosestSibling(target, 'img', false)
-      if (closestImg) {
-        closestImg.src = getIcon('directory', '', ['on', 'off'][Number(!!closestImg.src.includes('folderon'))])
+      
+      // 更新文件夹开闭图标（在 tree-row 中查找 img）
+      const treeRow = target.closest('.tree-row')
+      if (treeRow) {
+        const closestImg = treeRow.querySelector('img')
+        if (closestImg) {
+          closestImg.src = getIcon('directory', '', ['on', 'off'][Number(!!closestImg.src.includes('folderon'))])
+        }
       }
     }
   })
@@ -195,31 +234,36 @@ function initSideBarLow(clickedPath, dom, refresh) {
   // 该层级初始化渲染或刷新时，将重新渲染整个树结构
   if (dom.innerHTML.trim() == '' || refresh) {
     const currentFilePath = getProperty('currentFilePath')
-    dom.innerHTML = (function (tree) {
+    const res = (function (tree) {
       let res = ''
       if (tree && tree.children) {
         for (let children of tree.children)
           if (children.type == 'directory')
             res += `<li>
-            <img src="${getIcon('directory', '', 'off')}" class="file-icon"></img>
-            <span data-path="${children.path}" data-type="directory" data-name="${children.name}">
-             ${children.name}
-            </span>
+            <div class="tree-row">
+              <img src="${getIcon('directory', '', 'off')}" class="file-icon"></img>
+              <span data-path="${children.path}" data-type="directory" data-name="${children.name}">
+               ${children.name}
+              </span>
+            </div>
             <ul></ul>
             </li>`
         for (let children of tree.children)
           if (children.type == 'file') {
             const isActive = currentFilePath === children.path
             res += `<li>
-            <img src="${getIcon('file', children.name)}" class="file-icon"></img>
-            <span data-path="${children.path}" data-type="file" data-name="${children.name}" class="${isActive ? 'active-file' : ''}">
-              ${children.name}
-            </span>
+            <div class="tree-row${isActive ? ' active' : ''}">
+              <img src="${getIcon('file', children.name)}" class="file-icon"></img>
+              <span data-path="${children.path}" data-type="file" data-name="${children.name}">
+                ${children.name}
+              </span>
+            </div>
             </li>`
           }
       }
       return res
     })(dreeTree)
+    dom.innerHTML = res
   }
   // 若已探索过该层级，则只要更新显隐状态即可
   else {
@@ -241,19 +285,58 @@ module.exports.initSideBarLow = initSideBarLow
 /**
  * 高亮当前打开的文件
  */
-function highlightActiveFile(filePath) {
-  // 清除所有高亮
-  const allSpans = document.querySelectorAll('#tree-view span[data-type="file"]')
-  allSpans.forEach(span => {
-    span.classList.remove('active-file')
-  })
+// function highlightActiveFile(filePath) {
+//   // 清除所有高亮
+//   const allSpans = document.querySelectorAll('#tree-view span[data-type="file"]')
+//   const allLis = document.querySelectorAll('#tree-view li')
+//   allSpans.forEach(span => {
+//     span.classList.remove('active-file')
+//   })
+//   allLis.forEach(li => {
+//     li.classList.remove('active-file-item')
+//   })
   
-  // 高亮当前文件
-  if (filePath) {
-    const activeSpan = document.querySelector(`#tree-view span[data-path="${filePath}"]`)
-    if (activeSpan) {
-      activeSpan.classList.add('active-file')
-    }
+//   // 高亮当前文件
+//   if (filePath) {
+//     const activeSpan = document.querySelector(`#tree-view span[data-path="${filePath}"]`)
+//     if (activeSpan) {
+//       activeSpan.classList.add('active-file')
+//       const activeLi = activeSpan.closest('li')
+//       if (activeLi) {
+//         activeLi.classList.add('active-file-item')
+//       }
+//     }
+//   }
+// }
+// module.exports.highlightActiveFile = highlightActiveFile
+
+
+/**
+ * 高亮当前打开的文件（基于 tree-row，而不是 li）
+ */
+function highlightActiveFile(filePath) {
+  const treeView = document.getElementById("tree-view");
+  if (!treeView) return;
+
+  // 1. 清除所有已激活状态（只清 tree-row）
+  treeView
+    .querySelectorAll(".tree-row.active")
+    .forEach(row => row.classList.remove("active"));
+
+  // 2. 根据 filePath 找到对应的 span
+  if (!filePath) return;
+
+  const activeSpan = treeView.querySelector(
+    `span[data-type="file"][data-path="${CSS.escape(filePath)}"]`
+  );
+
+  if (!activeSpan) return;
+
+  // 3. 给对应的 tree-row 加 active
+  const activeRow = activeSpan.closest(".tree-row");
+  if (activeRow) {
+    activeRow.classList.add("active");
   }
 }
-module.exports.highlightActiveFile = highlightActiveFile
+
+module.exports.highlightActiveFile = highlightActiveFile;

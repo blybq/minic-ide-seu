@@ -12,7 +12,10 @@
   "license": "MIT",
   "dependencies": {
     "dree": "^2.4.16",
-    "electron-prompt": "^1.6.0"
+    "electron-prompt": "^1.6.0",
+    "prettier": "^2.8.8",
+    "iconv-lite": "^0.6.3",
+    "clang-format": "^1.8.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.2",

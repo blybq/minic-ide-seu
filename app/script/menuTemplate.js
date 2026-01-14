@@ -2,12 +2,176 @@
 
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
+
+/**
+ * 获取最近打开的文件和工作区菜单项
+ */
+function getRecentItemsMenu() {
+  const historyPath = path.join(__dirname, '../../config/RecentHistory.json')
+  let history = { recentFiles: [], recentWorkspaces: [] }
+  
+  try {
+    if (fs.existsSync(historyPath)) {
+      const data = fs.readFileSync(historyPath, 'utf8')
+      history = JSON.parse(data)
+    }
+  } catch (err) {
+    console.error('读取历史记录失败:', err)
+  }
+  
+  // 生成最近打开的文件菜单项
+  const recentFilesMenu = history.recentFiles.map((filePath, index) => {
+    const fileName = path.basename(filePath)
+    const displayName = fileName.length > 50 ? fileName.substring(0, 47) + '...' : fileName
+    return {
+      label: `${index + 1}. ${displayName}`,
+      click: (item, focusedWindow) => {
+        if (focusedWindow) {
+          focusedWindow.webContents.executeJavaScript(`
+            (function() {
+              try {
+                const { openFile } = require('../script/activityBar')
+                openFile(${JSON.stringify(filePath)})
+              } catch (err) {
+                console.error('打开最近文件失败:', err)
+              }
+            })()
+          `).catch(err => console.error('执行打开最近文件失败:', err))
+        }
+      }
+    }
+  })
+  
+  // 如果没有最近文件，添加提示
+  if (recentFilesMenu.length === 0) {
+    recentFilesMenu.push({
+      label: '（无）',
+      enabled: false
+    })
+  }
+  
+  // 添加清除选项
+  recentFilesMenu.push({
+    type: 'separator'
+  })
+  recentFilesMenu.push({
+    label: '清除历史记录',
+    click: (item, focusedWindow) => {
+      if (focusedWindow) {
+        focusedWindow.webContents.executeJavaScript(`
+          (function() {
+            try {
+              const { clearRecentFiles } = require('../script/recentHistory')
+              clearRecentFiles()
+              // 重新构建菜单
+              const { Menu } = require('electron').remote
+              const { createMenuTemplate } = require('../script/menuTemplate')
+              const menu = Menu.buildFromTemplate(createMenuTemplate())
+              Menu.setApplicationMenu(menu)
+            } catch (err) {
+              console.error('清除文件历史记录失败:', err)
+            }
+          })()
+        `).catch(err => console.error('执行清除文件历史记录失败:', err))
+      }
+    }
+  })
+  
+  // 生成最近打开的工作区菜单项
+  const recentWorkspacesMenu = history.recentWorkspaces.map((workspacePath, index) => {
+    const workspaceName = path.basename(workspacePath)
+    const displayName = workspaceName.length > 50 ? workspaceName.substring(0, 47) + '...' : workspaceName
+    return {
+      label: `${index + 1}. ${displayName}`,
+      click: (item, focusedWindow) => {
+        if (focusedWindow) {
+          const normalizedPath = workspacePath.replace(/\\/g, '/')
+          focusedWindow.webContents.executeJavaScript(`
+            (function() {
+              try {
+                const { setProperty, getProperty } = require('../script/utils')
+                const { initSideBarLow } = require('../script/sidebar')
+                const { addRecentWorkspace } = require('../script/recentHistory')
+                const treeView = document.querySelector('#tree-view')
+                
+                addRecentWorkspace(${JSON.stringify(normalizedPath)})
+                setProperty('currentPath', ${JSON.stringify(normalizedPath)})
+                
+                if (treeView) {
+                  initSideBarLow(${JSON.stringify(normalizedPath)}, treeView, true)
+                  const currentPath = getProperty('currentPath')
+                  document.title = (currentPath || '未打开工作区') + ' - Minisys IDE'
+                } else {
+                  setTimeout(() => {
+                    const retryTreeView = document.querySelector('#tree-view')
+                    if (retryTreeView) {
+                      initSideBarLow(${JSON.stringify(normalizedPath)}, retryTreeView, true)
+                      const currentPath = getProperty('currentPath')
+                      document.title = (currentPath || '未打开工作区') + ' - Minisys IDE'
+                    }
+                  }, 200)
+                }
+              } catch (err) {
+                console.error('打开最近工作区失败:', err)
+              }
+            })()
+          `).catch(err => console.error('执行打开最近工作区失败:', err))
+        }
+      }
+    }
+  })
+  
+  // 如果没有最近工作区，添加提示
+  if (recentWorkspacesMenu.length === 0) {
+    recentWorkspacesMenu.push({
+      label: '（无）',
+      enabled: false
+    })
+  }
+  
+  // 添加清除选项
+  recentWorkspacesMenu.push({
+    type: 'separator'
+  })
+  recentWorkspacesMenu.push({
+    label: '清除历史记录',
+    click: (item, focusedWindow) => {
+      if (focusedWindow) {
+        focusedWindow.webContents.executeJavaScript(`
+          (function() {
+            try {
+              const { clearRecentWorkspaces } = require('../script/recentHistory')
+              clearRecentWorkspaces()
+              // 重新构建菜单
+              const { Menu } = require('electron').remote
+              const { createMenuTemplate } = require('../script/menuTemplate')
+              const menu = Menu.buildFromTemplate(createMenuTemplate())
+              Menu.setApplicationMenu(menu)
+            } catch (err) {
+              console.error('清除工作区历史记录失败:', err)
+            }
+          })()
+        `).catch(err => console.error('执行清除工作区历史记录失败:', err))
+      }
+    }
+  })
+  
+  return {
+    recentFiles: recentFilesMenu,
+    recentWorkspaces: recentWorkspacesMenu
+  }
+}
+
 /**
  * 创建菜单模板
  * 这个函数返回菜单模板，但 click 回调需要在渲染进程中执行
  * 因此需要通过 IPC 或 executeJavaScript 来调用渲染进程的函数
  */
 function createMenuTemplate() {
+  const recentMenus = getRecentItemsMenu()
+  
   return [
     {
       label: '文件',
@@ -71,6 +235,18 @@ function createMenuTemplate() {
                 // 使用正确的路径分隔符
                 const normalizedPath = selectedPath.replace(/\\/g, '/')
                 
+                // 添加到最近打开的工作区
+                targetWindow.webContents.executeJavaScript(`
+                  (function() {
+                    try {
+                      const { addRecentWorkspace } = require('../script/recentHistory')
+                      addRecentWorkspace(${JSON.stringify(normalizedPath)})
+                    } catch (err) {
+                      console.error('添加工作区历史记录失败:', err)
+                    }
+                  })()
+                `).catch(() => {})
+                
                 targetWindow.webContents.executeJavaScript(`
                   (function() {
                     try {
@@ -106,6 +282,17 @@ function createMenuTemplate() {
               console.error('打开工作区对话框失败:', err)
             }
           },
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: '最近打开的文件',
+          submenu: recentMenus.recentFiles
+        },
+        {
+          label: '最近打开的工作区',
+          submenu: recentMenus.recentWorkspaces
         },
         {
           type: 'separator',

@@ -20,9 +20,10 @@ try {
 }
 
 // 初始化文件和目录右键菜单
-const { setupDirectoryContextMenu, setupFileContextMenu } = require('./fileContextMenu')
+const { setupDirectoryContextMenu, setupFileContextMenu, setupBlankAreaContextMenu } = require('./fileContextMenu')
 setupDirectoryContextMenu()
 setupFileContextMenu()
+setupBlankAreaContextMenu()
 
 // 初始化终端（延迟初始化，等待DOM加载完成）
 setTimeout(() => {

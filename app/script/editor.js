@@ -33,8 +33,101 @@ fs.readFile(jsonPath, 'utf8', (err, data) => {
       enableSnippets: true,
       enableLiveAutocompletion: true,
     })
+    
+    // 应用自动换行（仅在用户开启时）
+    if (appSettings.wrap === true) {
+      // 修复：禁用换行时的缩进，避免第二行及以后比第一行多缩进一个制表符
+      editor.session.setOption('indentedSoftWrap', false)
+      editor.session.setUseWrapMode(true)
+    }
+    
+    // 应用制表符大小
+    if (appSettings.tab_size) {
+      editor.session.setTabSize(appSettings.tab_size)
+    }
   }
 })
+
+// 自动保存功能
+let autoSaveTimer = null
+
+function startAutoSave() {
+  const { getProperty } = require('./utils')
+  const fs = require('fs')
+  const path = require('path')
+  
+  // 清除旧的定时器
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  
+  // 仅在自动保存开启时启动
+  if (appSettings && appSettings.auto_save === true) {
+    const interval = appSettings.auto_save_interval || 3000
+    
+    autoSaveTimer = setInterval(() => {
+      const currentFilePath = getProperty('currentFilePath')
+      if (!currentFilePath) return
+      
+      // 检查文件是否存在于磁盘上（已保存过的文件）
+      if (!fs.existsSync(currentFilePath)) return
+      
+      const openedDocs = getProperty('openedDocs') || []
+      const doc = openedDocs.find(d => d.path === currentFilePath)
+      
+      // 仅在文件已保存过且有修改时才自动保存
+      if (doc && doc.modified) {
+        try {
+          const encoding = appSettings.file_encoding || 'utf8'
+          fs.writeFileSync(currentFilePath, editor.getValue(), encoding)
+          doc.modified = false
+          
+          // 更新文档状态
+          const docIndex = openedDocs.findIndex(d => d.path === currentFilePath)
+          if (docIndex !== -1) {
+            openedDocs[docIndex].modified = false
+          }
+        } catch (err) {
+          console.error('自动保存失败:', err)
+        }
+      }
+    }, interval)
+  }
+}
+
+function stopAutoSave() {
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer)
+    autoSaveTimer = null
+  }
+}
+
+// 监听设置变更事件
+window.addEventListener('editorSettingsChanged', (e) => {
+  const { autoSave, autoSaveInterval, fileEncoding } = e.detail || {}
+  
+  // 更新自动保存设置
+  if (appSettings) {
+    appSettings.auto_save = autoSave
+    appSettings.auto_save_interval = autoSaveInterval
+    appSettings.file_encoding = fileEncoding
+  }
+  
+  // 重启自动保存
+  stopAutoSave()
+  if (autoSave) {
+    startAutoSave()
+  }
+})
+
+// 初始化自动保存
+if (appSettings && appSettings.auto_save === true) {
+  // 延迟启动，确保编辑器已完全初始化
+  setTimeout(() => {
+    startAutoSave()
+  }, 1000)
+}
 
 // 自定义代码联想内容。
 let completerListJson

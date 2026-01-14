@@ -225,6 +225,43 @@ function loadEditorSettings(container) {
           <option value="github" ${appSettings.theme === 'github' ? 'selected' : ''}>GitHub</option>
         </select>
       </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; margin-bottom: 5px; color: #cccccc;">
+          <input type="checkbox" id="settings-wrap" ${appSettings.wrap === true ? 'checked' : ''} 
+                 style="margin-right: 8px; width: 16px; height: 16px;" />
+          自动换行
+        </label>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; margin-bottom: 5px; color: #cccccc;">
+          <input type="checkbox" id="settings-auto-save" ${appSettings.auto_save === true ? 'checked' : ''} 
+                 style="margin-right: 8px; width: 16px; height: 16px;" />
+          自动保存
+        </label>
+        <div style="margin-left: 24px; margin-top: 5px;">
+          <label style="display: block; margin-bottom: 5px; color: #aaaaaa; font-size: 12px;">保存间隔（毫秒）</label>
+          <input type="number" id="settings-auto-save-interval" value="${appSettings.auto_save_interval || 3000}" 
+                 min="1000" step="1000"
+                 style="width: 120px; padding: 5px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 2px;" />
+        </div>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; color: #cccccc;">制表符大小</label>
+        <input type="number" id="settings-tab-size" value="${appSettings.tab_size || 4}" 
+               min="1" max="8" step="1"
+               style="width: 100px; padding: 5px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 2px;" />
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; color: #cccccc;">文件编码</label>
+        <select id="settings-file-encoding" 
+                style="width: 200px; padding: 5px; background: #3c3c3c; border: 1px solid #555; color: #fff; border-radius: 2px;">
+          <option value="utf8" ${appSettings.file_encoding === 'utf8' || !appSettings.file_encoding ? 'selected' : ''}>UTF-8</option>
+          <option value="gbk" ${appSettings.file_encoding === 'gbk' ? 'selected' : ''}>GBK</option>
+          <option value="gb2312" ${appSettings.file_encoding === 'gb2312' ? 'selected' : ''}>GB2312</option>
+          <option value="ascii" ${appSettings.file_encoding === 'ascii' ? 'selected' : ''}>ASCII</option>
+          <option value="latin1" ${appSettings.file_encoding === 'latin1' ? 'selected' : ''}>Latin1</option>
+        </select>
+      </div>
       <div>
         <button id="settings-editor-confirm" 
                 style="padding: 8px 20px; background: #007acc; color: #fff; border: none; border-radius: 3px; cursor: pointer; margin-right: 10px;">确认修改</button>
@@ -240,14 +277,29 @@ function loadEditorSettings(container) {
     const cancelBtn = $('#settings-editor-cancel')
     const fontSizeInput = $('#settings-font-size')
     const themeSelect = $('#settings-theme')
+    const wrapCheckbox = $('#settings-wrap')
+    const autoSaveCheckbox = $('#settings-auto-save')
+    const autoSaveIntervalInput = $('#settings-auto-save-interval')
+    const tabSizeInput = $('#settings-tab-size')
+    const fileEncodingSelect = $('#settings-file-encoding')
     
     if (confirmBtn && fontSizeInput && themeSelect) {
       confirmBtn.addEventListener('click', () => {
         const fontSize = parseInt(fontSizeInput.value)
         const theme = themeSelect.value
+        const wrap = wrapCheckbox ? wrapCheckbox.checked : false
+        const autoSave = autoSaveCheckbox ? autoSaveCheckbox.checked : false
+        const autoSaveInterval = autoSaveIntervalInput ? parseInt(autoSaveIntervalInput.value) : 3000
+        const tabSize = tabSizeInput ? parseInt(tabSizeInput.value) : 4
+        const fileEncoding = fileEncodingSelect ? fileEncodingSelect.value : 'utf8'
         
         appSettings.font_size = fontSize
         appSettings.theme = theme
+        appSettings.wrap = wrap
+        appSettings.auto_save = autoSave
+        appSettings.auto_save_interval = autoSaveInterval
+        appSettings.tab_size = tabSize
+        appSettings.file_encoding = fileEncoding
         
         try {
           fs.writeFileSync(settingsPath, JSON.stringify(appSettings, null, 2))
@@ -256,6 +308,20 @@ function loadEditorSettings(container) {
           if (window.editor) {
             window.editor.setFontSize(fontSize)
             window.editor.setTheme('ace/theme/' + theme)
+            // 应用自动换行（仅在用户开启时）
+            if (wrap) {
+              window.editor.session.setUseWrapMode(true)
+            } else {
+              window.editor.session.setUseWrapMode(false)
+            }
+            // 应用制表符大小
+            if (tabSize) {
+              window.editor.session.setTabSize(tabSize)
+            }
+            // 触发自动保存设置更新事件
+            window.dispatchEvent(new CustomEvent('editorSettingsChanged', { 
+              detail: { autoSave, autoSaveInterval, fileEncoding } 
+            }))
           }
           
           // 关闭覆盖层
@@ -541,7 +607,16 @@ function searchInDirectory(dirPath, query, results) {
       } else if (item.isFile()) {
         // 搜索文件内容
         try {
-          const content = fs.readFileSync(fullPath, 'utf8')
+          // 获取文件编码设置
+          let encoding = 'utf8'
+          try {
+            const settingsPath = path.join(__dirname, '../../config/AppSettings.json')
+            const appSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+            encoding = appSettings.file_encoding || 'utf8'
+          } catch (err) {
+            // 使用默认编码
+          }
+          const content = fs.readFileSync(fullPath, encoding)
           const lines = content.split('\n')
           const queryLower = query.toLowerCase()
           
@@ -588,13 +663,26 @@ function openFile(filePath, lineNumber = null) {
     return
   }
   
+  // 获取文件编码设置
+  let encoding = 'utf8'
+  try {
+    const settingsPath = path.join(__dirname, '../../config/AppSettings.json')
+    const appSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
+    encoding = appSettings.file_encoding || 'utf8'
+  } catch (err) {
+    // 使用默认编码
+  }
+  
+  // 添加到最近打开的文件
+  try {
+    const { addRecentFile } = require('./recentHistory')
+    addRecentFile(filePath)
+  } catch (err) {
+    console.error('添加文件历史记录失败:', err)
+  }
+  
   // 读取文件
-  fs.readFile(filePath, 'utf8', (err, data) => {
-    if (err) {
-      dialog.showErrorBox('错误', `无法打开文件: ${err.message}`)
-      return
-    }
-    
+  readFileWithEncoding(filePath, encoding).then(data => {
     const { getHighlightMode } = require('./utils')
     const docToAdd = {
       path: filePath,
@@ -619,6 +707,8 @@ function openFile(filePath, lineNumber = null) {
     switchView('explorer')
     const { highlightActiveFile } = require('./sidebar')
     highlightActiveFile(filePath)
+  }).catch(err => {
+    dialog.showErrorBox('错误', `无法打开文件: ${err.message}`)
   })
 }
 

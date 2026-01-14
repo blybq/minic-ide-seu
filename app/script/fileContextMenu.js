@@ -16,6 +16,7 @@ const { refreshExplorer } = require('./autoRefresh')
 function setupDirectoryContextMenu() {
   const treeView = $('#tree-view')
   
+  // 使用冒泡阶段，让空白区域菜单先处理（在捕获阶段）
   treeView.addEventListener('contextmenu', e => {
     const target = e.target
     const span = target.closest('span[data-type="directory"]')
@@ -68,6 +69,7 @@ function setupDirectoryContextMenu() {
 function setupFileContextMenu() {
   const treeView = $('#tree-view')
   
+  // 使用冒泡阶段，让空白区域菜单先处理（在捕获阶段）
   treeView.addEventListener('contextmenu', e => {
     const target = e.target
     const span = target.closest('span[data-type="file"]')
@@ -204,7 +206,7 @@ function createNewFile(dirPath) {
     // 自动刷新目录树（延迟一下确保文件系统更新完成）
     setTimeout(() => {
       refreshExplorer()
-    }, 100)
+    }, 200)
   }).catch(err => {
     console.error(err)
   })
@@ -496,7 +498,166 @@ function deleteFile(filePath) {
   })
 }
 
+/**
+ * 为空白区域添加右键菜单
+ */
+function setupBlankAreaContextMenu() {
+  // 首先添加全局的contextmenu事件监听器，捕获所有右键点击
+  document.addEventListener('contextmenu', e => {
+  }, true) // 使用捕获阶段
+  
+  const treeView = $('#tree-view')
+  
+  
+  if (!treeView) {
+    return
+  }
+  
+  // 使用捕获阶段，在文件/目录菜单之前检查，但只在没有匹配文件/目录时才处理
+  treeView.addEventListener('contextmenu', e => {
+    // 检查是否点击在文件或目录上
+    // 修复：检查点击的元素或其父元素是否是文件/目录span
+    const target = e.target
+    // 检查target本身及其所有父元素，看是否有文件/目录span
+    let currentElement = target
+    let foundFileOrDirSpan = null
+    let checkDepth = 0
+    const maxDepth = 5 // 最多检查5层父元素
+    
+    while (currentElement && currentElement !== treeView && checkDepth < maxDepth) {
+      if (currentElement.tagName === 'SPAN' && currentElement.dataset && currentElement.dataset.type) {
+        if (currentElement.dataset.type === 'file' || currentElement.dataset.type === 'directory') {
+          foundFileOrDirSpan = currentElement
+          break
+        }
+      }
+      currentElement = currentElement.parentElement
+      checkDepth++
+    }
+    
+    
+    // 如果点击在文件或目录上，不处理（由其他菜单处理）
+    if (foundFileOrDirSpan) {
+      return
+    }
+    
+    // 如果点击在空白区域，显示新建菜单
+    // 检查target是否是treeView本身，或者点击在treeView的空白区域（不是文件/目录元素）
+    const isTreeViewSelf = target === treeView
+    const isInTreeView = treeView.contains(target)
+    // 检查点击的元素是否是li（文件/目录项），如果是，检查是否点击在span上
+    const clickedLi = target.closest('li')
+    const clickedSpan = target.closest('span[data-type]')
+    const isClickOnSpan = clickedSpan && (clickedSpan.dataset.type === 'file' || clickedSpan.dataset.type === 'directory')
+    // 如果点击在li上但不是span，说明点击在空白区域（li的其他部分，比如图标旁边）
+    const isClickOnLiButNotSpan = clickedLi && !isClickOnSpan
+    // 检查点击的元素是否是img（图标），如果是，也认为是点击在文件/目录上
+    const isClickOnImg = target.tagName === 'IMG' || target.closest('img')
+    // 检查点击的元素是否是ul（子目录列表），如果是，认为是空白区域
+    const isClickOnUl = target.tagName === 'UL' || (target.closest('ul') && target.closest('ul').parentElement === clickedLi)
+    const targetParent = target.parentElement
+    const targetParentTag = targetParent ? targetParent.tagName : null
+    const targetParentId = targetParent ? targetParent.id : null
+    // 检查点击位置是否在tree-view的直接子元素（ul）上，或者tree-view本身
+    const isDirectChildOfTreeView = targetParent === treeView || (targetParent && targetParent.parentElement === treeView)
+    
+    // 如果点击在treeView内但不是文件/目录span，显示菜单
+    // 空白区域包括：treeView本身、ul元素（子目录列表）、li元素但不是span或img、或者其他非文件/目录元素
+    // 排除：点击在span（文件/目录名）或img（图标）上
+    const shouldShowBlankMenu = isInTreeView && !isClickOnSpan && !isClickOnImg && (isTreeViewSelf || isClickOnUl || isClickOnLiButNotSpan || (!clickedLi && !clickedSpan) || isDirectChildOfTreeView)
+    
+    
+    if (shouldShowBlankMenu) {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      // 获取当前工作区路径
+      const currentPath = getProperty('currentPath')
+      if (!currentPath) {
+        return
+      }
+      
+      const { Menu } = require('electron').remote
+      const remoteWindow = require('electron').remote.getCurrentWindow()
+      
+      const menu = Menu.buildFromTemplate([
+        {
+          label: '新建文件',
+          click: () => {
+            createNewFile(currentPath)
+          }
+        },
+        {
+          label: '新建目录',
+          click: () => {
+            createNewDirectory(currentPath)
+          }
+        }
+      ])
+      
+      try {
+        menu.popup({ window: remoteWindow })
+      } catch (popupErr) {
+        console.error('显示空白区域菜单失败:', popupErr)
+      }
+    }
+  }, true) // 使用捕获阶段，确保在文件/目录菜单之前检查
+  
+  
+  // 额外检查：在sidebar容器上也添加监听器，如果点击在空白区域，显示菜单
+  const sidebar = $('#sidebar')
+  if (sidebar) {
+    sidebar.addEventListener('contextmenu', e => {
+      // 如果点击在sidebar上但不是tree-view，且不是文件/目录，显示空白区域菜单
+      if (e.target === sidebar || (e.target.parentElement === sidebar && e.target !== treeView)) {
+        // 检查是否点击在文件/目录上
+        const clickedSpan = e.target.closest('span[data-type]')
+        if (!clickedSpan) {
+          e.preventDefault()
+          e.stopPropagation()
+          
+          const currentPath = getProperty('currentPath')
+          if (!currentPath) {
+            return
+          }
+          
+          const { Menu } = require('electron').remote
+          const menu = Menu.buildFromTemplate([
+            {
+              label: '新建文件',
+              click: () => {
+                createNewFile(currentPath)
+              }
+            },
+            {
+              label: '新建目录',
+              click: () => {
+                createNewDirectory(currentPath)
+              }
+            }
+          ])
+          
+          try {
+            menu.popup({ window: require('electron').remote.getCurrentWindow() })
+          } catch (popupErr) {
+            console.error('显示sidebar空白区域菜单失败:', popupErr)
+          }
+        }
+      }
+    }, true)
+  }
+  
+  // 额外检查：在explorer-view容器上也添加监听器
+  const explorerView = $('#explorer-view')
+  if (explorerView) {
+    explorerView.addEventListener('contextmenu', e => {
+      // 暂时不处理
+    }, true)
+  }
+}
+
 module.exports = {
   setupDirectoryContextMenu,
-  setupFileContextMenu
+  setupFileContextMenu,
+  setupBlankAreaContextMenu
 }
