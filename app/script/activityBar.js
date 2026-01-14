@@ -150,14 +150,29 @@ function showSettingsPanel(panelType) {
 function loadSettingsHTML(type) {
   const overlay = $('#settings-overlay')
   const content = $('#settings-content')
+  const console = $('#console')
   
   if (!overlay || !content) {
     return
   }
   
   try {
-    // 显示覆盖层
+    // 计算终端高度，动态设置覆盖层的 bottom
+    let bottomOffset = 0
+    if (console && console.style.display !== 'none') {
+      const consoleHeight = console.offsetHeight || 220  // 默认 220px
+      const dragbarHeight = 6  // 拖拽条高度
+      bottomOffset = consoleHeight + dragbarHeight
+    }
+    
+    // 显示覆盖层，确保它在最上层
     overlay.style.display = 'block'
+    overlay.style.zIndex = '10000'
+    overlay.style.position = 'absolute'
+    overlay.style.top = '0'
+    overlay.style.left = '0'
+    overlay.style.right = '0'
+    overlay.style.bottom = bottomOffset + 'px'
     
     // 加载设置内容
     if (type === 'editor') {
